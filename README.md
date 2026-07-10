@@ -26,10 +26,6 @@ When building production apps, network failures are inevitable. **Dio Retry It**
 
 ---
 
-Here's a fast, simple, and easy-to-read table of contents:
-
----
-
 ## 📑 Table of Contents
 
 - [✨ Why Dio Retry It?](#-why-dio-retry-it)

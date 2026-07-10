@@ -282,8 +282,8 @@ class RetryInterceptor extends Interceptor {
 }
 
 // Internal keys for storing retry metadata in request options
-const _kDisableRetryKey = 'ro_disable_retry';
-const _kAttemptKey = 'ro_attempt';
+const _kDisableRetryKey = 'disableRetry';
+const _kAttemptKey = 'attemptCounter';
 
 /// Retry-related properties on [RequestOptions].
 ///

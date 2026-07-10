@@ -26,6 +26,36 @@ When building production apps, network failures are inevitable. **Dio Retry It**
 
 ---
 
+Here's a fast, simple, and easy-to-read table of contents:
+
+---
+
+## 📑 Table of Contents
+
+- [✨ Why Dio Retry It?](#-why-dio-retry-it)
+    - [🎯 Key Features](#-key-features)
+- [🚀 Getting Started](#-getting-started)
+    - [Installation](#installation)
+    - [Basic Usage](#basic-usage)
+- [🎯 How It Works](#-how-it-works)
+    - [The Retry Strategy](#the-retry-strategy)
+    - [Why Full Jitter Matters](#-why-full-jitter-matters)
+- [📖 Advanced Usage](#-advanced-usage)
+    - [Custom Retry Logic](#custom-retry-logic)
+    - [Custom Retry Delays](#custom-retry-delays)
+    - [Disable Retry for Specific Requests](#disable-retry-for-specific-requests)
+    - [Working with FormData](#working-with-formdata)
+- [⚙️ Configuration Reference](#️-configuration-reference)
+    - [Constructor Parameters](#constructor-parameters)
+    - [Default Retry Status Codes](#default-retry-status-codes)
+    - [Extending Status Codes](#extending-status-codes)
+- [🔄 Migration Guide](#-migration-guide)
+    - [From dio_smart_retry to dio_retry_it](#from-dio_smart_retry-to-dio_retry_it)
+- [📊 Performance & Best Practices](#-performance--best-practices)
+    - [When to Use Retries](#-when-to-use-retries)
+    - [Production Recommendations](#-production-recommendations)
+---
+
 ## 🚀 Getting Started
 
 ### Installation

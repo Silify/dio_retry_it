@@ -1,7 +1,7 @@
-[![Pub Version](https://img.shields.io/pub/v/dio_smart_retry?logo=dart&logoColor=white)](https://pub.dev/packages/dio_smart_retry/)
-[![Dart SDK Version](https://badgen.net/pub/sdk-version/dio_smart_retry)](https://pub.dev/packages/dio_smart_retry/)
+[![Pub Version](https://img.shields.io/pub/v/dio_retry_it?logo=dart&logoColor=white)](https://pub.dev/packages/dio_retry_it/)
+[![Dart SDK Version](https://badgen.net/pub/sdk-version/dio_retry_it)](https://pub.dev/packages/dio_retry_it/)
 [![style: very good analysis](https://img.shields.io/badge/style-very_good_analysis-B22C89.svg)](https://pub.dev/packages/very_good_analysis)
-[![License](https://img.shields.io/github/license/rodion-m/dio_smart_retry)](https://github.com/rodion-m/dio_smart_retry/blob/master/LICENSE)
+[![License](https://img.shields.io/github/license/rodion-m/dio_retry_it)](https://github.com/Silify/dio_retry_it/blob/master/LICENSE)
 
 # Dio Smart Retry
 Flexible retry library for Dio package. This is a next generation of an abandoned `dio_retry` package. \
@@ -22,10 +22,10 @@ Also, it supports dynamic delay between retries. \
 
 ## Getting Started for Dio
 
-1. Add package to pubspec.yaml: `dio_smart_retry: ^7.0.0` **
-2. Import package: `import 'package:dio_smart_retry/dio_smart_retry.dart'`
+1. Add package to pubspec.yaml: `dio_retry_it: ^7.0.0` **
+2. Import package: `import 'package:dio_retry_it/dio_retry_it.dart'`
 
-** For the old dio (ver. 4.+) use `dio_smart_retry: ^1.4.0`
+** For the old dio (ver. 4.+) use `dio_retry_it: ^1.4.0`
 
 ## Usage
 
@@ -47,7 +47,7 @@ dio.interceptors.add(RetryInterceptor(
 /// Sending a failing request for 3 times with 1s, then 2s, then 3s interval
 await dio.get('https://mock.codes/500');
 ```
-[See `example/dio_smart_retry_example.dart`](https://github.com/rodion-m/dio_smart_retry/blob/master/example/dio_smart_retry_example.dart).
+[See `example/dio_smart_retry_example.dart`](https://github.com/Silify/dio_retry_it/blob/master/example/dio_smart_retry_example.dart).
 
 ## Default retryable status codes list
 Responses with these http status codes will be retried by default:

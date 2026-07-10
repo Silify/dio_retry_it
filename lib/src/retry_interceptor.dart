@@ -1,8 +1,8 @@
 import 'dart:async';
 
 import 'package:dio/dio.dart';
-import 'package:dio_smart_retry/src/default_retry_evaluator.dart';
-import 'package:dio_smart_retry/src/http_status_codes.dart';
+import 'package:dio_retry_it/src/default_retry_evaluator.dart';
+import 'package:dio_retry_it/src/http_status_codes.dart';
 
 typedef RetryEvaluator = FutureOr<bool> Function(
   DioException error,

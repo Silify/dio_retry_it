@@ -19,7 +19,7 @@
 - Add supporting of [DioX](https://pub.dev/packages/diox)
 
 ## 1.4.0
-- Add supporting of retrying for requests with `multipart/form-data`, use `MultipartFileRecreatable` class for that ([details](https://github.com/rodion-m/dio_smart_retry#retry-requests-with-multipartform-data)).
+- Add supporting of retrying for requests with `multipart/form-data`, use `MultipartFileRecreatable` class for that ([details](https://github.com/Silify/dio_retry_it#retry-requests-with-multipartform-data)).
 - `DefaultRetryEvaluator` and status codes constants from the file `http_status_codes.dart` was made a part of the public API.
 
 ## 1.3.2

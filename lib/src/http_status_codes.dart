@@ -1,4 +1,4 @@
-import 'package:dio_smart_retry/dio_smart_retry.dart';
+import 'package:dio_retry_it/dio_retry_it.dart';
 
 // 1xx Informational status codes
 const status100Continue = 100;

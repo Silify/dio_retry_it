@@ -2,7 +2,7 @@
 library;
 
 import 'package:dio/dio.dart';
-import 'package:dio_smart_retry/dio_smart_retry.dart';
+import 'package:dio_retry_it/dio_retry_it.dart';
 import 'package:test/test.dart';
 
 void main() {

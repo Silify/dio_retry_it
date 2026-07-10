@@ -1,10 +1,9 @@
-// https://github.com/rodion-m/dio_smart_retry/issues/2
+// https://github.com/Silify/dio_retry_it/issues/2
 @TestOn('vm')
 library;
 
-
 import 'package:dio/dio.dart';
-import 'package:dio_smart_retry/dio_smart_retry.dart';
+import 'package:dio_retry_it/dio_retry_it.dart';
 import 'package:test/test.dart';
 
 void main() {

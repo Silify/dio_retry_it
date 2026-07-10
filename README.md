@@ -1,6 +1,6 @@
 # Dio Retry It 🚀
 
-**An Smarter retry interceptor for Dio with exponential backoff and full jitter based on dio_smart_retry**
+**A Smarter retry interceptor for Dio with exponential backoff and full jitter based on dio_smart_retry**
 
 [![Pub Version](https://img.shields.io/pub/v/dio_retry_it?logo=dart&logoColor=white)](https://pub.dev/packages/dio_retry_it/)
 [![Dart SDK Version](https://badgen.net/pub/sdk-version/dio_retry_it)](https://pub.dev/packages/dio_retry_it/)

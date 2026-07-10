@@ -1,23 +1,35 @@
-import 'dart:async';
+import 'package:dio/dio.dart';
+import 'package:dio_retry_it/dio_retry_it.dart';
 
-Future<dynamic> main() async {
-  // final dio = Dio();
-  // // Add the interceptor
-  // dio.interceptors.add(
-  //   RetryInterceptor(
-  //     dio: dio,
-  //     logPrint: print, // specify log function (optional)
-  //     retries: 4, // retry count (optional)
-  //     retryDelays: const [
-  //       // set delays between retries (optional)
-  //       Duration(seconds: 1), // wait 1 sec before the first retry
-  //       Duration(seconds: 2), // wait 2 sec before the second retry
-  //       Duration(seconds: 3), // wait 3 sec before the third retry
-  //       Duration(seconds: 4), // wait 4 sec before the fourth retry
-  //     ],
-  //   ),
-  // );
-  //
-  // /// Sending a failing request for 4 times from 1s to 4s
-  // await dio.get<dynamic>('https://mock.codes/500');
+Future<void> main() async {
+  // Create Dio instance
+  final dio = Dio();
+
+  // Add the retry interceptor with exponential backoff and full jitter
+  dio.interceptors.add(
+    RetryInterceptor(
+      dio: dio,
+      maxAttempts: 4,
+      // Retry up to 4 times (total 5 attempts including original)
+      baseDelay: const Duration(milliseconds: 500),
+      // Start with 500ms delay
+      maxDelay: const Duration(seconds: 10),
+      // Cap at 10 seconds
+      backoffFactor: 2.0,
+      // Double the delay each attempt
+      logPrint: print, // Optional: log retry attempts
+    ),
+  );
+
+  try {
+    // This request will be automatically retried with exponential backoff
+    // Attempt 1: 0-500ms delay
+    // Attempt 2: 0-1,000ms delay
+    // Attempt 3: 0-2,000ms delay
+    // Attempt 4: 0-4,000ms delay
+    print('Sending request to https://mock.codes/500...');
+    await dio.get('https://mock.codes/500');
+  } catch (e) {
+    print('Request failed after all retry attempts: $e');
+  }
 }

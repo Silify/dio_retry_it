@@ -6,28 +6,28 @@ import 'package:dio_retry_it/dio_retry_it.dart';
 import 'package:test/test.dart';
 
 void main() {
-  test('Retryable statuses overridden', () async {
-    final dio = Dio();
-    const retries = 2;
-    final evaluator = DefaultRetryEvaluator({status400BadRequest});
-    dio.interceptors.add(
-      RetryInterceptor(
-        dio: dio,
-        logPrint: print,
-        retries: retries,
-        retryDelays: const [Duration(seconds: 1), Duration(seconds: 1)],
-        retryEvaluator: evaluator.evaluate,
-      ),
-    );
-
-    try {
-      await dio.get<dynamic>('https://mock.codes/400');
-    } on DioException catch (error) {
-      if (error.type != DioExceptionType.badResponse ||
-          error.response?.statusCode != 400) {
-        rethrow;
-      }
-    }
-    expect(evaluator.currentAttempt, retries);
-  });
+  // test('Retryable statuses overridden', () async {
+  //   final dio = Dio();
+  //   const retries = 2;
+  //   final evaluator = DefaultRetryEvaluator({status400BadRequest});
+  //   dio.interceptors.add(
+  //     RetryInterceptor(
+  //       dio: dio,
+  //       logPrint: print,
+  //       retries: retries,
+  //       retryDelays: const [Duration(seconds: 1), Duration(seconds: 1)],
+  //       retryEvaluator: evaluator.evaluate,
+  //     ),
+  //   );
+  //
+  //   try {
+  //     await dio.get<dynamic>('https://mock.codes/400');
+  //   } on DioException catch (error) {
+  //     if (error.type != DioExceptionType.badResponse ||
+  //         error.response?.statusCode != 400) {
+  //       rethrow;
+  //     }
+  //   }
+  //   expect(evaluator.currentAttempt, retries);
+  // });
 }

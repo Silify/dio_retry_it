@@ -1,99 +1,74 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:dio/dio.dart';
-import 'package:dio_retry_it/src/default_retry_evaluator.dart';
-import 'package:dio_retry_it/src/http_status_codes.dart';
+import 'package:dio_retry_it/dio_retry_it.dart';
 
+/// A function that evaluates whether a retry should be attempted.
+///
+/// Returns `true` if the request should be retried, `false` otherwise.
+/// [attempt] is 1-based (first retry is attempt 1).
 typedef RetryEvaluator = FutureOr<bool> Function(
-  DioException error,
-  int attempt,
-);
+    DioException error, int attempt);
 
-/// An interceptor that will try to send failed request again
+/// An interceptor that automatically retries failed requests using
+/// exponential backoff with full jitter.
+///
+/// Delay formula: `min(baseDelay * backoffFactor^(attempt - 1), maxDelay)`,
+/// then a random value in `[0, delay]` is used as the actual wait. Jitter
+/// prevents many clients from retrying in lockstep against a recovering
+/// server, which matters far more for real-world reliability than a fixed
+/// delay schedule.
 class RetryInterceptor extends Interceptor {
   RetryInterceptor({
     required this.dio,
     this.logPrint,
-    this.retries = 3,
-    this.retryDelays = const [
-      Duration(seconds: 1),
-      Duration(seconds: 3),
-      Duration(seconds: 5),
-    ],
+    this.maxAttempts = 3,
+    this.baseDelay = const Duration(milliseconds: 500),
+    this.maxDelay = const Duration(seconds: 10),
+    this.backoffFactor = 2.0,
     RetryEvaluator? retryEvaluator,
-    this.ignoreRetryEvaluatorExceptions = false,
-    this.retryableExtraStatuses = const {},
-  }) : _retryEvaluator = retryEvaluator ??
-            DefaultRetryEvaluator({
-              ...defaultRetryableStatuses,
-              ...retryableExtraStatuses,
-            }).evaluate {
-    if (retryEvaluator != null && retryableExtraStatuses.isNotEmpty) {
-      throw ArgumentError(
-        '[retryableExtraStatuses] works only if [retryEvaluator] is null.'
-            ' Set either [retryableExtraStatuses] or [retryEvaluator].'
-            ' Not both.',
-        'retryableExtraStatuses',
-      );
+  }) : _shouldRetry = retryEvaluator ?? _defaultEvaluator {
+    if (maxAttempts < 0) {
+      throw ArgumentError('[maxAttempts] cannot be negative', 'maxAttempts');
     }
-    if (retries < 0) {
-      throw ArgumentError(
-        '[retries] cannot be less than 0',
-        'retries',
-      );
+    if (backoffFactor < 1) {
+      throw ArgumentError('[backoffFactor] must be >= 1', 'backoffFactor');
     }
   }
 
-  /// The original dio
+  /// The Dio instance used to re-fetch retried requests.
   final Dio dio;
 
-  /// For logging purpose
+  /// Optional logging hook, called once per retry attempt.
   final void Function(String message)? logPrint;
 
-  /// The number of retry in case of an error
-  final int retries;
+  /// Maximum number of retry attempts (not counting the original request).
+  final int maxAttempts;
 
-  /// Ignore exception if [_retryEvaluator] throws it (not recommend)
-  final bool ignoreRetryEvaluatorExceptions;
+  /// Delay before the first retry, before backoff is applied.
+  final Duration baseDelay;
 
-  /// The delays between attempts.
-  /// Empty [retryDelays] means no delay.
-  ///
-  /// If [retries] count more than [retryDelays] count,
-  ///   the last element value of [retryDelays] will be used.
-  final List<Duration> retryDelays;
+  /// Upper bound on the computed delay, before jitter is applied.
+  final Duration maxDelay;
 
-  /// Evaluating if a retry is necessary.regarding the error.
-  ///
-  /// It can be a good candidate for additional operations too, like
-  ///   updating authentication token in case of a unauthorized error
-  ///   (be careful with concurrency though).
-  ///
-  /// Defaults to [DefaultRetryEvaluator.evaluate]
-  ///   with [defaultRetryableStatuses].
-  final RetryEvaluator _retryEvaluator;
+  /// Multiplier applied to the delay after each attempt.
+  final double backoffFactor;
 
-  /// Specifies an extra retryable statuses,
-  ///   which will be taken into account with [defaultRetryableStatuses]
-  /// IMPORTANT: THIS SETTING WORKS ONLY IF [_retryEvaluator] is null
-  final Set<int> retryableExtraStatuses;
+  /// Decides whether a given error on a given attempt should be retried.
+  final RetryEvaluator _shouldRetry;
 
-  /// Redirects to [DefaultRetryEvaluator.evaluate]
-  ///   with [defaultRetryableStatuses]
-  static final FutureOr<bool> Function(DioException error, int attempt)
-      defaultRetryEvaluator =
-      DefaultRetryEvaluator(defaultRetryableStatuses).evaluate;
+  static final _random = Random();
 
-  Future<bool> _shouldRetry(DioException error, int attempt) async {
-    try {
-      return await _retryEvaluator(error, attempt);
-    } catch (e) {
-      logPrint?.call('There was an exception in _retryEvaluator: $e');
-      if (!ignoreRetryEvaluatorExceptions) {
-        rethrow;
-      }
+  static bool _defaultEvaluator(DioException error, int attempt) {
+    if (error.type == DioExceptionType.cancel) return false;
+    if (error.error is FormatException) return false;
+    if (error.type == DioExceptionType.badResponse) {
+      final statusCode = error.response?.statusCode;
+      return statusCode != null &&
+          defaultRetryableStatuses.contains(statusCode);
     }
-    return true;
+    return true; // timeouts, connection errors, etc.
   }
 
   @override
@@ -101,92 +76,86 @@ class RetryInterceptor extends Interceptor {
     DioException err,
     ErrorInterceptorHandler handler,
   ) async {
-    if (err.requestOptions.disableRetry) {
+    final options = err.requestOptions;
+
+    if (options.disableRetry) return super.onError(err, handler);
+
+    final attempt = options._attempt + 1;
+    final canRetry = attempt <= maxAttempts;
+
+    bool willRetry;
+    try {
+      willRetry = canRetry && await _shouldRetry(err, attempt);
+    } catch (e) {
+      logPrint?.call('Retry evaluator threw, aborting retry: $e');
       return super.onError(err, handler);
     }
-    bool isRequestCancelled() =>
-        err.requestOptions.cancelToken?.isCancelled ?? false;
 
-    final attempt = err.requestOptions._attempt + 1;
-    final shouldRetry = attempt <= retries && await _shouldRetry(err, attempt);
+    if (!willRetry) return super.onError(err, handler);
 
-    if (!shouldRetry) {
-      return super.onError(err, handler);
-    }
+    options._attempt = attempt;
+    final delay = _jitteredDelay(attempt);
 
-    err.requestOptions._attempt = attempt;
-    final delay = _getDelay(attempt);
     logPrint?.call(
-      '[${err.requestOptions.path}] An error occurred during request, '
-      'trying again '
-      '(attempt: $attempt/$retries, '
-      'wait ${delay.inMilliseconds} ms, '
-      'error: ${err.error ?? err})',
+      '[${options.path}] retrying (attempt $attempt/$maxAttempts, '
+      'delay ${delay.inMilliseconds}ms, error: ${err.error ?? err})',
     );
 
-    var requestOptions = err.requestOptions;
-    if (requestOptions.data is FormData) {
-      requestOptions = _recreateOptions(err.requestOptions);
-    }
+    // FormData can only be consumed once, so it must be cloned before reuse.
+    final retryOptions = options.data is FormData
+        ? options.copyWith(data: (options.data as FormData).clone())
+        : options;
 
-    if (delay != Duration.zero) {
+    if (delay > Duration.zero) {
       await Future<void>.delayed(delay);
     }
-    if (isRequestCancelled()) {
-      logPrint?.call('Request was cancelled. Cancel retrying.');
+
+    // Re-check after the delay: cancellation may have happened while waiting.
+    if (options.cancelToken?.isCancelled ?? false) {
+      logPrint?.call('[${options.path}] cancelled during retry delay');
       return super.onError(err, handler);
     }
 
     try {
-      await dio
-          .fetch<void>(requestOptions)
-          .then((value) => handler.resolve(value));
+      final response = await dio.fetch<void>(retryOptions);
+      handler.resolve(response);
     } on DioException catch (e) {
       super.onError(e, handler);
     }
   }
 
-  Duration _getDelay(int attempt) {
-    if (retryDelays.isEmpty) return Duration.zero;
-    return attempt - 1 < retryDelays.length
-        ? retryDelays[attempt - 1]
-        : retryDelays.last;
-  }
-
-  RequestOptions _recreateOptions(RequestOptions options) {
-    if (options.data is! FormData) {
-      throw ArgumentError(
-        'requestOptions.data is not FormData',
-        'requestOptions',
-      );
-    }
-    final formData = options.data as FormData;
-    final newFormData = formData.clone();
-    return options.copyWith(data: newFormData);
+  /// Computes the exponential backoff delay for [attempt], then applies
+  /// full jitter: a random duration in `[0, delay]`.
+  Duration _jitteredDelay(int attempt) {
+    final exponential = baseDelay * pow(backoffFactor, attempt - 1);
+    final capped = exponential < maxDelay ? exponential : maxDelay;
+    final jitteredMs = (_random.nextDouble() * capped.inMilliseconds).round();
+    return Duration(milliseconds: jitteredMs);
   }
 }
 
 const _kDisableRetryKey = 'ro_disable_retry';
+const _kAttemptKey = 'ro_attempt';
 
+/// Retry-related properties on [RequestOptions].
 extension RequestOptionsX on RequestOptions {
-  static const _kAttemptKey = 'ro_attempt';
-
+  /// Current retry attempt number (0 = original request, not yet retried).
   int get attempt => _attempt;
 
+  /// Whether retry is disabled for this request.
   bool get disableRetry => (extra[_kDisableRetryKey] as bool?) ?? false;
-
   set disableRetry(bool value) => extra[_kDisableRetryKey] = value;
 
   int get _attempt => (extra[_kAttemptKey] as int?) ?? 0;
-
   set _attempt(int value) => extra[_kAttemptKey] = value;
 }
 
+/// Retry-related properties on [Options].
 extension OptionsX on Options {
+  /// Whether retry is disabled for this request.
   bool get disableRetry => (extra?[_kDisableRetryKey] as bool?) ?? false;
-
   set disableRetry(bool value) {
-    extra = Map.of(extra ??= <String, dynamic>{});
+    extra = Map.of(extra ?? <String, dynamic>{});
     extra![_kDisableRetryKey] = value;
   }
 }

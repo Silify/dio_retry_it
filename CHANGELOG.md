@@ -1,3 +1,42 @@
+## 8.0.0
+
+- **[BREAKING CHANGE]** Complete redesign of retry strategy from **fixed delays** to **exponential backoff with full jitter**
+- **[BREAKING CHANGE]** Removed `retryDelays` parameter - replaced with `baseDelay`, `maxDelay`, and `backoffFactor`
+- **[BREAKING CHANGE]** Renamed `retries` parameter to `maxAttempts` for clarity
+- **[BREAKING CHANGE]** Removed `retryableExtraStatuses` parameter - use custom `retryEvaluator` instead
+- **[BREAKING CHANGE]** Removed `ignoreRetryEvaluatorExceptions` parameter - built-in error handling
+- **[BREAKING CHANGE]** Removed `MultipartFileRecreatable` - use regular `MultipartFile` with automatic cloning
+- **[NEW]** Exponential backoff with full jitter prevents thundering herd problems
+- **[NEW]** Automatic FormData cloning - no manual recreation needed
+- **[NEW]** Better logging with attempt count and delay information
+- **[IMPROVED]** Better error handling in retry evaluator
+- **[IMPROVED]** Enhanced documentation with examples
+- **[IMPROVED]** Full null safety with modern Dart practices
+
+### Migration Guide
+
+Replace fixed delays with exponential backoff:
+
+**Before:**
+```dart
+RetryInterceptor(
+  dio: dio,
+  retries: 3,
+  retryDelays: [Duration(seconds: 1), Duration(seconds: 2), Duration(seconds: 3)],
+)
+```
+
+**After:**
+```dart
+RetryInterceptor(
+  dio: dio,
+  maxAttempts: 3,
+  baseDelay: Duration(seconds: 1),
+  maxDelay: Duration(seconds: 10),
+  backoffFactor: 2.0,
+)
+```
+
 ## 7.0.0
 - [BREAKING CHANGE] `MultipartFileRecreatable` removed. Use a regular `MultipartFile` instead of `MultipartFileRecreatable`.
 
@@ -19,7 +58,7 @@
 - Add supporting of [DioX](https://pub.dev/packages/diox)
 
 ## 1.4.0
-- Add supporting of retrying for requests with `multipart/form-data`, use `MultipartFileRecreatable` class for that ([details](https://github.com/rodion-m/dio_smart_retry#retry-requests-with-multipartform-data)).
+- Add supporting of retrying for requests with `multipart/form-data`, use `MultipartFileRecreatable` class for that ([details](https://github.com/Silify/dio_retry_it#retry-requests-with-multipartform-data)).
 - `DefaultRetryEvaluator` and status codes constants from the file `http_status_codes.dart` was made a part of the public API.
 
 ## 1.3.2

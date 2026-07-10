@@ -1,99 +1,206 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:dio/dio.dart';
-import 'package:dio_smart_retry/src/default_retry_evaluator.dart';
-import 'package:dio_smart_retry/src/http_status_codes.dart';
+import 'package:dio_retry_it/dio_retry_it.dart';
 
+/// A function that evaluates whether a retry should be attempted.
+///
+/// Returns `true` if the request should be retried, `false` otherwise.
+/// [attempt] is 1-based (first retry is attempt 1).
+///
+/// Example:
+/// ```dart
+/// final customEvaluator = (DioException error, int attempt) {
+///   // Only retry network errors and 5xx status codes
+///   if (error.type == DioExceptionType.connectionError) return true;
+///   if (error.type == DioExceptionType.badResponse) {
+///     final status = error.response?.statusCode ?? 0;
+///     return status >= 500 && status < 600;
+///   }
+///   return false;
+/// };
+/// ```
 typedef RetryEvaluator = FutureOr<bool> Function(
-  DioException error,
-  int attempt,
-);
+    DioException error, int attempt);
 
-/// An interceptor that will try to send failed request again
+/// An interceptor that automatically retries failed requests using
+/// exponential backoff with full jitter.
+///
+/// This interceptor provides a robust retry mechanism that:
+/// - Retries failed requests automatically based on configurable rules
+/// - Uses exponential backoff with full jitter to prevent thundering herd problems
+/// - Supports custom retry evaluation logic
+/// - Handles FormData cloning automatically
+/// - Respects request cancellation
+/// - Tracks retry attempts per request
+///
+/// ## Retry Strategy
+///
+/// The delay between retries follows a full jitter pattern:
+/// 1. Calculate exponential delay: `baseDelay * backoffFactor^(attempt-1)`
+/// 2. Cap at `maxDelay`
+/// 3. Apply full jitter: `random(0, cappedDelay)`
+///
+/// ### Example:
+/// With `baseDelay: 500ms`, `backoffFactor: 2.0`, `maxDelay: 10s`:
+/// - Attempt 1: delay = `random(0, 500ms)`
+/// - Attempt 2: delay = `random(0, 1000ms)`
+/// - Attempt 3: delay = `random(0, 2000ms)`
+/// - Attempt 4: delay = `random(0, 4000ms)`
+/// - Attempt 5: delay = `random(0, 8000ms)`
+/// - Attempt 6+: delay = `random(0, 10000ms)`
+///
+/// ## Default Retry Rules
+///
+/// By default, the interceptor retries:
+/// - Connection errors (timeouts, network issues)
+/// - Bad responses with status codes: 408, 429, 500, 502, 503, 504
+/// - Does NOT retry: cancelled requests, format exceptions, client errors
+///
+/// ## Usage Examples
+///
+/// ### Basic Setup
+/// ```dart
+/// final dio = Dio();
+/// dio.interceptors.add(RetryInterceptor(
+///   dio: dio,
+///   maxAttempts: 3,
+/// ));
+/// ```
+///
+/// ### Custom Retry Logic
+/// ```dart
+/// final dio = Dio();
+/// dio.interceptors.add(RetryInterceptor(
+///   dio: dio,
+///   maxAttempts: 5,
+///   baseDelay: Duration(seconds: 1),
+///   maxDelay: Duration(seconds: 30),
+///   retryEvaluator: (error, attempt) {
+///     // Only retry specific error types
+///     if (error.type == DioExceptionType.connectionTimeout) return true;
+///     if (error.type == DioExceptionType.receiveTimeout) return true;
+///     return error.response?.statusCode == 503;
+///   },
+/// ));
+/// ```
+///
+/// ### Disable Retry for Specific Requests
+/// ```dart
+/// final response = await dio.get(
+///   'https://api.example.com/data',
+///   options: Options(extra: {'disableRetry': true}),
+/// );
+/// ```
+///
+/// ### Logging
+/// ```dart
+/// final dio = Dio();
+/// dio.interceptors.add(RetryInterceptor(
+///   dio: dio,
+///   logPrint: (message) => print('Retry: $message'),
+/// ));
+/// ```
 class RetryInterceptor extends Interceptor {
+  /// Creates a new RetryInterceptor with the specified configuration.
+  ///
+  /// Parameters:
+  /// - [dio]: The Dio instance used to re-fetch retried requests (required)
+  /// - [logPrint]: Optional logging hook, called once per retry attempt
+  /// - [maxAttempts]: Maximum number of retry attempts (default: 3)
+  /// - [baseDelay]: Delay before the first retry (default: 500ms)
+  /// - [maxDelay]: Upper bound on the computed delay (default: 10s)
+  /// - [backoffFactor]: Multiplier applied to the delay after each attempt (default: 2.0)
+  /// - [retryEvaluator]: Custom function to determine if retry should happen
+  ///
+  /// Throws [ArgumentError] if [maxAttempts] is negative or [backoffFactor] < 1
   RetryInterceptor({
     required this.dio,
     this.logPrint,
-    this.retries = 3,
-    this.retryDelays = const [
-      Duration(seconds: 1),
-      Duration(seconds: 3),
-      Duration(seconds: 5),
-    ],
+    this.maxAttempts = 3,
+    this.baseDelay = const Duration(milliseconds: 500),
+    this.maxDelay = const Duration(seconds: 10),
+    this.backoffFactor = 2.0,
     RetryEvaluator? retryEvaluator,
-    this.ignoreRetryEvaluatorExceptions = false,
-    this.retryableExtraStatuses = const {},
-  }) : _retryEvaluator = retryEvaluator ??
-            DefaultRetryEvaluator({
-              ...defaultRetryableStatuses,
-              ...retryableExtraStatuses,
-            }).evaluate {
-    if (retryEvaluator != null && retryableExtraStatuses.isNotEmpty) {
-      throw ArgumentError(
-        '[retryableExtraStatuses] works only if [retryEvaluator] is null.'
-            ' Set either [retryableExtraStatuses] or [retryEvaluator].'
-            ' Not both.',
-        'retryableExtraStatuses',
-      );
+  }) : _shouldRetry = retryEvaluator ?? _defaultEvaluator {
+    if (maxAttempts < 0) {
+      throw ArgumentError('[maxAttempts] cannot be negative', 'maxAttempts');
     }
-    if (retries < 0) {
-      throw ArgumentError(
-        '[retries] cannot be less than 0',
-        'retries',
-      );
+    if (backoffFactor < 1) {
+      throw ArgumentError('[backoffFactor] must be >= 1', 'backoffFactor');
     }
   }
 
-  /// The original dio
+  /// The Dio instance used to re-fetch retried requests.
+  ///
+  /// This should typically be the same Dio instance that the interceptor
+  /// is attached to, but can be a different instance if needed.
   final Dio dio;
 
-  /// For logging purpose
+  /// Optional logging hook, called once per retry attempt.
+  ///
+  /// The callback receives a descriptive message about each retry attempt,
+  /// including the attempt number, delay, and error details.
   final void Function(String message)? logPrint;
 
-  /// The number of retry in case of an error
-  final int retries;
-
-  /// Ignore exception if [_retryEvaluator] throws it (not recommend)
-  final bool ignoreRetryEvaluatorExceptions;
-
-  /// The delays between attempts.
-  /// Empty [retryDelays] means no delay.
+  /// Maximum number of retry attempts (not counting the original request).
   ///
-  /// If [retries] count more than [retryDelays] count,
-  ///   the last element value of [retryDelays] will be used.
-  final List<Duration> retryDelays;
+  /// For example, if `maxAttempts = 3`, the interceptor will try the request
+  /// up to 4 times total (1 original + 3 retries).
+  final int maxAttempts;
 
-  /// Evaluating if a retry is necessary.regarding the error.
+  /// Delay before the first retry, before backoff is applied.
   ///
-  /// It can be a good candidate for additional operations too, like
-  ///   updating authentication token in case of a unauthorized error
-  ///   (be careful with concurrency though).
+  /// This serves as the base for the exponential backoff calculation.
+  /// The actual delay for the first retry will be a random value between 0
+  /// and [baseDelay] (full jitter).
+  final Duration baseDelay;
+
+  /// Upper bound on the computed delay, before jitter is applied.
   ///
-  /// Defaults to [DefaultRetryEvaluator.evaluate]
-  ///   with [defaultRetryableStatuses].
-  final RetryEvaluator _retryEvaluator;
+  /// Prevents the delay from growing indefinitely. Once the computed
+  /// exponential delay exceeds this value, it's capped at [maxDelay].
+  final Duration maxDelay;
 
-  /// Specifies an extra retryable statuses,
-  ///   which will be taken into account with [defaultRetryableStatuses]
-  /// IMPORTANT: THIS SETTING WORKS ONLY IF [_retryEvaluator] is null
-  final Set<int> retryableExtraStatuses;
+  /// Multiplier applied to the delay after each attempt.
+  ///
+  /// Must be >= 1.0. Common values:
+  /// - `2.0` (default): Classic exponential backoff
+  /// - `1.5`: Slower growth, more retries in shorter time
+  /// - `3.0`: Faster growth, fewer retries
+  final double backoffFactor;
 
-  /// Redirects to [DefaultRetryEvaluator.evaluate]
-  ///   with [defaultRetryableStatuses]
-  static final FutureOr<bool> Function(DioException error, int attempt)
-      defaultRetryEvaluator =
-      DefaultRetryEvaluator(defaultRetryableStatuses).evaluate;
+  /// Decides whether a given error on a given attempt should be retried.
+  ///
+  /// This is the core logic that determines if a retry should be attempted.
+  /// The default implementation retries timeout errors, connection errors,
+  /// and specific status codes (408, 429, 500, 502, 503, 504).
+  final RetryEvaluator _shouldRetry;
 
-  Future<bool> _shouldRetry(DioException error, int attempt) async {
-    try {
-      return await _retryEvaluator(error, attempt);
-    } catch (e) {
-      logPrint?.call('There was an exception in _retryEvaluator: $e');
-      if (!ignoreRetryEvaluatorExceptions) {
-        rethrow;
-      }
+  /// Random number generator used for jitter calculation.
+  static final _random = Random();
+
+  /// Default retry evaluator implementation.
+  ///
+  /// Retries:
+  /// - All errors except: cancelled requests and format exceptions
+  /// - For [DioExceptionType.badResponse], only retries status codes:
+  ///   - 408: Request Timeout
+  ///   - 429: Too Many Requests
+  ///   - 500: Internal Server Error
+  ///   - 502: Bad Gateway
+  ///   - 503: Service Unavailable
+  ///   - 504: Gateway Timeout
+  static bool _defaultEvaluator(DioException error, int attempt) {
+    if (error.type == DioExceptionType.cancel) return false;
+    if (error.error is FormatException) return false;
+    if (error.type == DioExceptionType.badResponse) {
+      final statusCode = error.response?.statusCode;
+      return statusCode != null &&
+          defaultRetryableStatuses.contains(statusCode);
     }
-    return true;
+    return true; // timeouts, connection errors, etc.
   }
 
   @override
@@ -101,92 +208,136 @@ class RetryInterceptor extends Interceptor {
     DioException err,
     ErrorInterceptorHandler handler,
   ) async {
-    if (err.requestOptions.disableRetry) {
+    final options = err.requestOptions;
+
+    // Skip retry if explicitly disabled
+    if (options.disableRetry) return super.onError(err, handler);
+
+    final attempt = options._attempt + 1;
+    final canRetry = attempt <= maxAttempts;
+
+    // Check if we should retry this error
+    bool willRetry;
+    try {
+      willRetry = canRetry && await _shouldRetry(err, attempt);
+    } catch (e) {
+      logPrint?.call('Retry evaluator threw, aborting retry: $e');
       return super.onError(err, handler);
     }
-    bool isRequestCancelled() =>
-        err.requestOptions.cancelToken?.isCancelled ?? false;
 
-    final attempt = err.requestOptions._attempt + 1;
-    final shouldRetry = attempt <= retries && await _shouldRetry(err, attempt);
+    if (!willRetry) return super.onError(err, handler);
 
-    if (!shouldRetry) {
-      return super.onError(err, handler);
-    }
+    // Update attempt counter and calculate delay
+    options._attempt = attempt;
+    final delay = _jitteredDelay(attempt);
 
-    err.requestOptions._attempt = attempt;
-    final delay = _getDelay(attempt);
+    // Log the retry attempt
     logPrint?.call(
-      '[${err.requestOptions.path}] An error occurred during request, '
-      'trying again '
-      '(attempt: $attempt/$retries, '
-      'wait ${delay.inMilliseconds} ms, '
-      'error: ${err.error ?? err})',
+      '[${options.path}] retrying (attempt $attempt/$maxAttempts, '
+      'delay ${delay.inMilliseconds}ms, error: ${err.error ?? err})',
     );
 
-    var requestOptions = err.requestOptions;
-    if (requestOptions.data is FormData) {
-      requestOptions = _recreateOptions(err.requestOptions);
-    }
+    // FormData can only be consumed once, so it must be cloned before reuse.
+    final retryOptions = options.data is FormData
+        ? options.copyWith(data: (options.data as FormData).clone())
+        : options;
 
-    if (delay != Duration.zero) {
+    // Wait for the computed delay
+    if (delay > Duration.zero) {
       await Future<void>.delayed(delay);
     }
-    if (isRequestCancelled()) {
-      logPrint?.call('Request was cancelled. Cancel retrying.');
+
+    // Re-check after the delay: cancellation may have happened while waiting.
+    if (options.cancelToken?.isCancelled ?? false) {
+      logPrint?.call('[${options.path}] cancelled during retry delay');
       return super.onError(err, handler);
     }
 
+    // Execute the retry
     try {
-      await dio
-          .fetch<void>(requestOptions)
-          .then((value) => handler.resolve(value));
+      final response = await dio.fetch<void>(retryOptions);
+      handler.resolve(response);
     } on DioException catch (e) {
       super.onError(e, handler);
     }
   }
 
-  Duration _getDelay(int attempt) {
-    if (retryDelays.isEmpty) return Duration.zero;
-    return attempt - 1 < retryDelays.length
-        ? retryDelays[attempt - 1]
-        : retryDelays.last;
-  }
-
-  RequestOptions _recreateOptions(RequestOptions options) {
-    if (options.data is! FormData) {
-      throw ArgumentError(
-        'requestOptions.data is not FormData',
-        'requestOptions',
-      );
-    }
-    final formData = options.data as FormData;
-    final newFormData = formData.clone();
-    return options.copyWith(data: newFormData);
+  /// Computes the exponential backoff delay for [attempt], then applies
+  /// full jitter: a random duration in `[0, delay]`.
+  ///
+  /// Full jitter prevents many clients from retrying in lockstep against
+  /// a recovering server, which matters far more for real-world reliability
+  /// than a fixed delay schedule.
+  ///
+  /// The algorithm:
+  /// 1. Calculate: `baseDelay * backoffFactor^(attempt-1)`
+  /// 2. Cap at `maxDelay`
+  /// 3. Return random value between 0 and the capped delay
+  Duration _jitteredDelay(int attempt) {
+    final exponential = baseDelay * pow(backoffFactor, attempt - 1);
+    final capped = exponential < maxDelay ? exponential : maxDelay;
+    final jitteredMs = (_random.nextDouble() * capped.inMilliseconds).round();
+    return Duration(milliseconds: jitteredMs);
   }
 }
 
-const _kDisableRetryKey = 'ro_disable_retry';
+// Internal keys for storing retry metadata in request options
+const _kDisableRetryKey = 'disableRetry';
+const _kAttemptKey = 'attemptCounter';
 
+/// Retry-related properties on [RequestOptions].
+///
+/// These extensions provide convenient access to retry configuration
+/// at the individual request level.
 extension RequestOptionsX on RequestOptions {
-  static const _kAttemptKey = 'ro_attempt';
-
+  /// Current retry attempt number (0 = original request, not yet retried).
+  ///
+  /// This value is automatically managed by the [RetryInterceptor].
+  /// It increments with each retry attempt.
   int get attempt => _attempt;
 
+  /// Whether retry is disabled for this request.
+  ///
+  /// When set to `true`, the [RetryInterceptor] will skip retry logic
+  /// for this request, even if the interceptor is active.
+  ///
+  /// Example:
+  /// ```dart
+  /// final options = RequestOptions(path: '/api/data');
+  /// options.disableRetry = true;
+  /// final response = await dio.fetch(options);
+  /// ```
   bool get disableRetry => (extra[_kDisableRetryKey] as bool?) ?? false;
-
   set disableRetry(bool value) => extra[_kDisableRetryKey] = value;
 
+  /// Internal attempt counter stored in [extra].
+  ///
+  /// This is managed automatically by the interceptor and should not
+  /// be modified directly.
   int get _attempt => (extra[_kAttemptKey] as int?) ?? 0;
-
   set _attempt(int value) => extra[_kAttemptKey] = value;
 }
 
+/// Retry-related properties on [Options].
+///
+/// These extensions provide convenient access to retry configuration
+/// at the request level when using [Dio]'s [Options] class.
 extension OptionsX on Options {
+  /// Whether retry is disabled for this request.
+  ///
+  /// When set to `true`, the [RetryInterceptor] will skip retry logic
+  /// for this request, even if the interceptor is active.
+  ///
+  /// Example:
+  /// ```dart
+  /// final response = await dio.get(
+  ///   'https://api.example.com/data',
+  ///   options: Options(extra: {'disableRetry': true}),
+  /// );
+  /// ```
   bool get disableRetry => (extra?[_kDisableRetryKey] as bool?) ?? false;
-
   set disableRetry(bool value) {
-    extra = Map.of(extra ??= <String, dynamic>{});
+    extra = Map.of(extra ?? <String, dynamic>{});
     extra![_kDisableRetryKey] = value;
   }
 }

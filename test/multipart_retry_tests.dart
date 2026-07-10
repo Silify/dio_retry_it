@@ -1,8 +1,6 @@
 @TestOn('vm')
 library;
 
-import 'package:dio/dio.dart';
-import 'package:dio_retry_it/dio_retry_it.dart';
 import 'package:test/test.dart';
 
 void main() {

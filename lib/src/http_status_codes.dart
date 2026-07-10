@@ -1,5 +1,3 @@
-import 'package:dio_retry_it/dio_retry_it.dart';
-
 // 1xx Informational status codes
 const status100Continue = 100;
 const status101SwitchingProtocols = 101;
@@ -206,13 +204,3 @@ const Set<int> cloudflareStatuses = {
   status526InvalidSSLCertificate,
   status527RailgunError,
 };
-
-// For backward compatibility purpose
-@Deprecated('Use [defaultRetryableStatuses]')
-const retryableStatuses = defaultRetryableStatuses;
-
-// For backward compatibility purpose
-/// Be careful: this method do not
-///   take into account [RetryInterceptor.retryableExtraStatuses]
-bool isRetryable(int statusCode) =>
-    defaultRetryableStatuses.contains(statusCode);

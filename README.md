@@ -7,7 +7,6 @@
 [![style: very good analysis](https://img.shields.io/badge/style-very_good_analysis-B22C89.svg)](https://pub.dev/packages/very_good_analysis)
 [![License](https://img.shields.io/github/license/rodion-m/dio_retry_it)](https://github.com/Silify/dio_retry_it/blob/master/LICENSE)
 
----
 
 ## ✨ Why Dio Retry It?
 
@@ -24,7 +23,6 @@ When building production apps, network failures are inevitable. **Dio Retry It**
 - **🔒 Null Safety** - Fully migrated to sound null safety
 - **⚙️ Highly Configurable** - Customize every aspect of the retry behavior
 
----
 
 ## 📑 Table of Contents
 
@@ -50,7 +48,7 @@ When building production apps, network failures are inevitable. **Dio Retry It**
 - [📊 Performance & Best Practices](#-performance--best-practices)
     - [When to Use Retries](#-when-to-use-retries)
     - [Production Recommendations](#-production-recommendations)
----
+
 
 ## 🚀 Getting Started
 
@@ -95,7 +93,7 @@ try {
 }
 ```
 
----
+
 
 ## 🎯 How It Works
 
@@ -127,7 +125,6 @@ Imagine thousands of clients all hitting a server that's temporarily down. When 
 
 > **Key Insight:** Random jitter matters far more for real-world reliability than a fixed delay schedule. This is why major cloud providers like AWS and Google Cloud recommend jitter-based retries.
 
----
 
 ## 📖 Advanced Usage
 
@@ -210,7 +207,6 @@ final response = await dio.post(
 );
 ```
 
----
 
 ## ⚙️ Configuration Reference
 
@@ -265,12 +261,10 @@ dio.interceptors.add(
 );
 ```
 
----
 ## 🔄 Migration Guide
 
 ### From dio_smart_retry to dio_retry_it
 
----
 
 ### Key Changes
 
@@ -282,7 +276,6 @@ dio.interceptors.add(
 | Fixed delays             | Exponential backoff with full jitter ✅     |
 | Manual FormData handling | Automatic cloning ✅                        |
 
----
 
 ### Migration Examples
 
@@ -312,7 +305,6 @@ RetryInterceptor(
 )
 ```
 
----
 
 #### Custom Status Codes
 
@@ -340,8 +332,6 @@ RetryInterceptor(
 )
 ```
 
----
-
 #### FormData
 
 **Before:**
@@ -358,7 +348,6 @@ final formData = FormData.fromMap({'file': file});
 // No extra code needed
 ```
 
----
 
 ### Removed Parameters
 
@@ -368,7 +357,6 @@ final formData = FormData.fromMap({'file': file});
 | `ignoreRetryEvaluatorExceptions` | Built-in error handling |
 | `retryDelays` | `baseDelay` + `backoffFactor` |
 
----
 
 ### ✅ Migration Checklist
 
@@ -379,11 +367,9 @@ final formData = FormData.fromMap({'file': file});
 - [ ] Remove `ignoreRetryEvaluatorExceptions` if used
 - [ ] Test your app
 
----
 
 **Benefit:** New package prevents thundering herd problems with **exponential backoff + full jitter** - critical for production apps with many concurrent users! 🚀
 
----
 
 ## 📊 Performance & Best Practices
 
@@ -421,7 +407,6 @@ dio.interceptors.add(
 );
 ```
 
----
 
 ## 🤝 Contributing
 
@@ -439,7 +424,6 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 Distributed under the MIT License. See `LICENSE` for more information.
 
----
 
 ## 🙏 Acknowledgments
 
@@ -452,7 +436,6 @@ This package is a next-generation fork of the abandoned `dio_smart_retry` packag
 - ✅ Improved error handling
 - ✅ Better test coverage
 
----
 
 ## 📞 Support
 

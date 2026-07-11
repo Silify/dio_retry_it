@@ -1,11 +1,16 @@
 # Dio Retry It 🚀
 
 **A Smarter retry interceptor for Dio with exponential backoff and full jitter based on dio_smart_retry**
+<div align="center">
+
+![](https://github.com/silify/dio_retry_it/blob/master/banner.png)
 
 [![Pub Version](https://img.shields.io/pub/v/dio_retry_it?logo=dart&logoColor=white)](https://pub.dev/packages/dio_retry_it/)
 [![Dart SDK Version](https://badgen.net/pub/sdk-version/dio_retry_it)](https://pub.dev/packages/dio_retry_it/)
 [![style: very good analysis](https://img.shields.io/badge/style-very_good_analysis-B22C89.svg)](https://pub.dev/packages/very_good_analysis)
-[![License](https://img.shields.io/github/license/rodion-m/dio_retry_it)](https://github.com/Silify/dio_retry_it/blob/master/LICENSE)
+[![License](https://img.shields.io/github/license/silify/dio_retry_it)](https://github.com/Silify/dio_retry_it/blob/master/LICENSE)
+
+</div>
 
 
 ## ✨ Why Dio Retry It?
@@ -274,7 +279,6 @@ dio.interceptors.add(
 | `retryDelays: [...]`     | `baseDelay` + `backoffFactor` + `maxDelay` |
 | `retryableExtraStatuses` | Custom `retryEvaluator`                    |
 | Fixed delays             | Exponential backoff with full jitter ✅     |
-| Manual FormData handling | Automatic cloning ✅                        |
 
 
 ### Migration Examples
@@ -331,23 +335,6 @@ RetryInterceptor(
   },
 )
 ```
-
-#### FormData
-
-**Before:**
-```dart
-// Manual handling was needed
-final formData = FormData.fromMap({'file': file});
-// Interceptor called _recreateOptions internally
-```
-
-**After:**
-```dart
-// Automatic cloning - works out of the box!
-final formData = FormData.fromMap({'file': file});
-// No extra code needed
-```
-
 
 ### Removed Parameters
 

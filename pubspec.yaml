@@ -1,6 +1,6 @@
 name: dio_retry_it
 description: Retry library for Dio and Dio package made with love. By default, the request will be retried only for appropriate retryable http statuses.
-version: 8.0.0
+version: 8.0.1
 repository: https://github.com/Silify/dio_retry_it
 issue_tracker: https://github.com/Silify/dio_retry_it/issues
 homepage: https://github.com/Silify/dio_retry_it

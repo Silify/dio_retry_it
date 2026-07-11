@@ -1,3 +1,7 @@
+## 8.0.1
+
+- Improve code quality and fix dart analyze issues
+
 ## 8.0.0
 
 - **[BREAKING CHANGE]** Complete redesign of retry strategy from **fixed delays** to **exponential backoff with full jitter**

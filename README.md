@@ -63,7 +63,7 @@ Add to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  dio_retry_it: ^8.0.0
+  dio_retry_it: ^8.0.1
 ```
 
 Then import it:

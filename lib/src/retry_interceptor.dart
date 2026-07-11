@@ -22,14 +22,16 @@ import 'package:dio_retry_it/dio_retry_it.dart';
 /// };
 /// ```
 typedef RetryEvaluator = FutureOr<bool> Function(
-    DioException error, int attempt);
+  DioException error,
+  int attempt,
+);
 
 /// An interceptor that automatically retries failed requests using
 /// exponential backoff with full jitter.
 ///
 /// This interceptor provides a robust retry mechanism that:
 /// - Retries failed requests automatically based on configurable rules
-/// - Uses exponential backoff with full jitter to prevent thundering herd problems
+/// - Uses exponential backoff with full jitter
 /// - Supports custom retry evaluation logic
 /// - Handles FormData cloning automatically
 /// - Respects request cancellation
@@ -111,7 +113,7 @@ class RetryInterceptor extends Interceptor {
   /// - [maxAttempts]: Maximum number of retry attempts (default: 3)
   /// - [baseDelay]: Delay before the first retry (default: 500ms)
   /// - [maxDelay]: Upper bound on the computed delay (default: 10s)
-  /// - [backoffFactor]: Multiplier applied to the delay after each attempt (default: 2.0)
+  /// - [backoffFactor]: Multiply the delay after each attempt (default: 2)
   /// - [retryEvaluator]: Custom function to determine if retry should happen
   ///
   /// Throws [ArgumentError] if [maxAttempts] is negative or [backoffFactor] < 1
